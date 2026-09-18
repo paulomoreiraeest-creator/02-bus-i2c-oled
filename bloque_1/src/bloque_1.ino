@@ -1,16 +1,27 @@
-// ============================================================================
-// UETS SOPORTE TÉCNICO — SEMANA 02 — BLOQUE 1: ESCÁNER DE BUS I2C
-// 3° Bachillerato Técnico en Informática (2026–2027)
-// ============================================================================
-
 #include <Arduino.h>
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 #define SERIAL_BAUD 115200
+
 #define I2C_SDA_PIN 21
 #define I2C_SCL_PIN 22
-#define I2C_CLOCK_SPEED 400000 // 400 kHz (Modo Rápido)
-#define OLED_I2C_ADDR 0x3C     // Dirección física esperada de la pantalla OLED
+#define I2C_CLOCK_SPEED 400000 
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET_PIN -1
+#define OLED_I2C_ADDR 0x3C
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET_PIN);
+
+// Configuración de los ojos
+int radioOjo = 15;
+int radioPupila = 6;
+int ojoIzquierdoX = 50;
+int ojoDerechoX = 88;
+int ojoY = 32;
 
 void setup() {
     Serial.begin(SERIAL_BAUD);
@@ -19,40 +30,32 @@ void setup() {
     Serial.println("  [BLOQUE 1] ESCÁNER DE DIRECCIONES DE HARDWARE I2C     ");
     Serial.println("========================================================");
 
-    // TODO 1.1: Inicializar el bus I2C en los pines SDA y SCL del ESP32.
-    // Pregunta Guía: ¿Qué función de la librería Wire recibe (SDA_PIN, SCL_PIN)?
-    // Pista: Usa Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-    /* ESCRIBE TU CÓDIGO AQUÍ */
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
-    // TODO 1.2: Configurar la velocidad del reloj a 400kHz (Modo Rápido).
-    // Pregunta Guía: ¿Qué función configura la frecuencia de reloj del bus I2C?
-    // Pista: Usa Wire.setClock(I2C_CLOCK_SPEED);
-    /* ESCRIBE TU CÓDIGO AQUÍ */
-
+    Wire.setClock(I2C_CLOCK_SPEED);
     Serial.println("[I2C] Bus configurado en SDA:GPIO21, SCL:GPIO22 a 400kHz.\n");
     Serial.println("--- INICIANDO BARRIDO DE DIRECCIONES (0x01 .. 0x7E) ---");
 
     int devicesFound = 0;
-
-    // TODO 1.3: Recorrer las direcciones válidas de 7 bits (del 1 al 126).
+    
+    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
+        Serial.println("[OLED] ERROR: Pantalla no detectada.");
+        while (true);
+    }
+    
     for (byte address = 1; address < 127; address++) {
-
-        // TODO 1.4: Tocar la puerta del periférico:
-        // 1. Iniciar transmisión con Wire.beginTransmission(address);
-        // 2. Finalizar transmisión capturando el byte de error: byte error = Wire.endTransmission();
-        /* ESCRIBE TU CÓDIGO AQUÍ */
-
-        // TODO 1.5: Evaluar la respuesta del periférico:
-        // Pregunta Guía: ¿Qué valor devuelve Wire.endTransmission() cuando el periférico responde con ACK (Presente)?
-        // if (error == 0) {
-        //     Serial.printf("[I2C] Dispositivo detectado en: 0x%02X ", address);
-        //     if (address == OLED_I2C_ADDR) {
-        //         Serial.println("➔ [Display OLED SSD1306] [OK]");
-        //     } else {
-        //         Serial.println("➔ [Periférico Desconocido]");
-        //     }
-        //     devicesFound++;
-        // }
+        Wire.beginTransmission(address);
+        byte error = Wire.endTransmission();
+       
+        if (error==0) {
+          Serial.printf("[I2C] Dispositivo detectado en: 0x%02X ", address);
+          if (address == OLED_I2C_ADDR) {
+            Serial.println("➔ [Display OLED SSD1306] [OK]");
+          } else {
+            Serial.println("➔ [Periférico Desconocido]");
+          }
+          devicesFound++;
+        }
     }
 
     if (devicesFound == 0) {
@@ -61,9 +64,67 @@ void setup() {
     } else {
         Serial.printf("\n--- BARRIDO FINALIZADO: %d dispositivo(s) encontrado(s) ---\n", devicesFound);
     }
+
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.display();
+    
+    
+    
 }
 
 void loop() {
-    // El escaneo de hardware se ejecuta una sola vez al encender.
-    delay(1000);
+    // 1. Mirar al frente por 2 segundos
+  dibujarOjos(0, 0); 
+  delay(2000);
+
+  // 2. Parpadear
+  parpadeo();
+  
+  // 3. Mirar a la derecha por 1.5 segundos
+  dibujarOjos(5, 0); 
+  delay(1500);
+
+  // 4. Mirar a la izquierda por 1.5 segundos
+  dibujarOjos(-5, 0); 
+  delay(1500);
+  
+  // 5. Parpadear de nuevo antes de reiniciar el ciclo
+  parpadeo();
+}
+
+// Función principal para renderizar los ojos en una posición
+void dibujarOjos(int offsetPupilaX, int offsetPupilaY) {
+  display.clearDisplay(); // Borra la pantalla antes de dibujar el nuevo cuadro
+  int grosor = 2;
+  for (int i = 0; i < grosor; i++) {
+    // Ojo Izquierdo (un círculo por cada píxel de grosor)
+    display.drawCircle(ojoIzquierdoX, ojoY, radioOjo - i, SSD1306_WHITE);
+    
+    // Ojo Derecho
+    display.drawCircle(ojoDerechoX, ojoY, radioOjo - i, SSD1306_WHITE);
+  }
+  // Ojo Izquierdo (Contorno y Pupila)
+  display.drawCircle(ojoIzquierdoX, ojoY, radioOjo, SSD1306_WHITE);
+  display.fillCircle(ojoIzquierdoX + offsetPupilaX, ojoY + offsetPupilaY, radioPupila, SSD1306_WHITE);
+
+  // Ojo Derecho (Contorno y Pupila)
+  display.drawCircle(ojoDerechoX, ojoY, radioOjo, SSD1306_WHITE);
+  display.fillCircle(ojoDerechoX + offsetPupilaX, ojoY + offsetPupilaY, radioPupila, SSD1306_WHITE);
+
+  display.display(); // Aplica los cambios en la pantalla
+}
+// Función que recrea el efecto de cerrar y abrir los ojos
+void parpadeo() {
+  // Ojos cerrándose (se dibujan líneas horizontales)
+  display.clearDisplay();
+  display.drawFastHLine(ojoIzquierdoX - radioOjo, ojoY, radioOjo * 2, SSD1306_WHITE);
+  display.drawFastHLine(ojoDerechoX - radioOjo, ojoY, radioOjo * 2, SSD1306_WHITE);
+  display.display();
+  delay(150); // Tiempo que duran cerrados
+
+  // Regresa a mirar al frente (se vuelven a abrir)
+  dibujarOjos(0, 0);
 }
